@@ -60,7 +60,7 @@ func startMetricServer(listenAddress string) chan error {
 	return c
 }
 
-func main() {
+func setup() int {
 	args := parseArgs()
 	lvl := slog.LevelInfo
 	if args.debug {
@@ -72,7 +72,7 @@ func main() {
 
 	if args.disableHomie && args.disableHA {
 		logger.Info("Both Homie and HA message are disabled. Nothing to do")
-		return
+		return 1
 	}
 
 	logger.Info("mqtt exporter start")
@@ -122,7 +122,7 @@ func main() {
 	err = token.Error()
 	if err != nil {
 		mqtt_logger.Error("error connecting to mqtt", "broker", args.brokerUrl, "error", err)
-		return
+		return 1
 	}
 
 	mqtt_logger.Debug("mqtt client started and connected", "wait", wait_result)
@@ -144,7 +144,7 @@ func main() {
 		err = sub_token.Error()
 		if err != nil {
 			homie_mqtt_logger.Error("error subscribing to topic", "error", err)
-			return
+			return 1
 		}
 	}
 
@@ -153,7 +153,7 @@ func main() {
 		haListener, err = NewHAListener(logger, mqttClient, metric)
 		if err != nil {
 			logger.Error("halistener creation error", "error", err)
-			return
+			return 1
 		}
 	}
 
@@ -172,18 +172,22 @@ out:
 			break out
 		case err := <-httpChan:
 			logger.Error("http server", "error", err)
-			exit = 1
+			exit = 151
 			break out
 		case err := <-haListener.Done:
 			logger.Warn("ha listener error", "error", err)
-			exit = 2
+			exit = 152
 			break out
 		case err := <-mqttDisconnecChan:
 			logger.Warn("mqtt disconnected", "broker", args.brokerUrl, "error", err)
-			exit = 3
+			exit = 153
 			break out
 		}
 	}
 
-	os.Exit(exit)
+	return exit
+}
+
+func main() {
+	os.Exit(setup())
 }
