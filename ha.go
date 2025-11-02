@@ -54,8 +54,8 @@ func NewHAListener(logger *slog.Logger, client mqtt.Client, metric *prometheus.G
 
 	// Register to the configuration/discovery topic for homeassistant/sensors messages
 	token := l.client.Subscribe(
-		"homeassistant/sensor/#",
-		0, // At most once
+		"homeassistant/#",
+		1, // At most once
 		func(c mqtt.Client, m mqtt.Message) {
 			l.onHaConfMsg(m.Topic(), m.Payload())
 		},
@@ -76,7 +76,12 @@ func (h *HAListener) onHaConfMsg(topic string, payload []byte) {
 	// homeassistant discovery messages should have a look like `homeassistant/sensor/<dev path>/config`
 	// we only need to check the topic ends with 'config'
 	if !strings.HasSuffix(topic, "/config") {
-		h.logger.Debug("received ha message, but it's not a config topic", "topic", topic)
+		h.logger.Debug("received ha message, but it's not a sensor or number config topic", "topic", topic)
+		return
+	}
+
+	if !(strings.HasPrefix(topic, "homeassistant/number") || strings.HasPrefix(topic, "homeassistant/sensor")) {
+		h.logger.Debug("received ha message, but it's not a sensor or number topic", "topic", topic)
 		return
 	}
 
