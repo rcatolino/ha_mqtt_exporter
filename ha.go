@@ -68,7 +68,33 @@ func NewHAListener(logger *slog.Logger, client mqtt.Client, metric *prometheus.G
 		return nil, err
 	}
 
+	go func() {
+		for {
+			time.Sleep(5 * time.Minute)
+			logger.Debug("GC timer")
+			l.propGC()
+		}
+	}()
+
 	return &l, nil
+}
+
+func (h *HAListener) propGC() {
+	h.devMutex.Lock()
+	defer h.devMutex.Unlock()
+	now := time.Now()
+	for did, d := range h.devices {
+		for pid, prop := range d.properties {
+			if now.Sub(prop.lastSeen).Minutes() > 10 {
+				h.logger.Info("GC removing property",
+					"device", did,
+					"property", prop.name,
+					"last seen", prop.lastSeen,
+				)
+				delete(d.properties, pid)
+			}
+		}
+	}
 }
 
 func (h *HAListener) onHaConfMsg(topic string, payload []byte) {
@@ -197,6 +223,7 @@ func (h *HAListener) onHaDataMsg(dev *Device, prop *Property, payload []byte) {
 		h.logger.Warn("Couldn't convert payload to float, set property to ignore", "device", dev.name, "property", prop.name, "payload", payload, "error", err)
 		prop.ignored = true
 	} else {
+		prop.lastSeen = time.Now()
 		// Update metric
 		h.metric.With(prometheus.Labels{
 			"device":      dev.name,

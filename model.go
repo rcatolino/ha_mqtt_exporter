@@ -1,11 +1,14 @@
 package main
 
+import "time"
+
 // Represent the actual measurement node metadata
 type Property struct {
 	name        string
 	unit        string
 	statusTopic string
 	ignored     bool
+	lastSeen    time.Time
 }
 
 // Represent the device metadata
