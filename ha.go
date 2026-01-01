@@ -88,7 +88,9 @@ func (h *HAListener) propGC() {
 			if now.Sub(prop.lastSeen).Minutes() > 10 {
 				h.logger.Info("GC removing property",
 					"device", did,
-					"property", prop.name,
+					"device name", d.name,
+					"property", pid,
+					"property name", prop.name,
 					"last seen", prop.lastSeen,
 				)
 				delete(d.properties, pid)
@@ -157,7 +159,7 @@ func (h *HAListener) onHaConfMsg(topic string, payload []byte) {
 	propUpdated := false
 	// Create prop node if it doesn't exist yet
 	if !propExists {
-		prop = Property{ignored: false, statusTopic: conf.StatusTopic}
+		prop = Property{ignored: false, statusTopic: conf.StatusTopic, lastSeen: time.Now()}
 		// Subscribe to the prop state topic
 		token := h.client.Subscribe(
 			conf.StatusTopic,
