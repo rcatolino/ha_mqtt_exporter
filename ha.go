@@ -83,9 +83,11 @@ func (h *HAListener) propGC() {
 	h.devMutex.Lock()
 	defer h.devMutex.Unlock()
 	now := time.Now()
+	zero := time.Time{}
 	for did, d := range h.devices {
 		for pid, prop := range d.properties {
-			if now.Sub(prop.lastSeen).Minutes() > 10 {
+			if !prop.lastSeen.Equal(zero) && now.Sub(prop.lastSeen).Minutes() > 10 {
+				prop.lastSeen = zero
 				h.logger.Info("GC removing property",
 					"device", did,
 					"device name", d.name,
@@ -93,7 +95,13 @@ func (h *HAListener) propGC() {
 					"property name", prop.name,
 					"last seen", prop.lastSeen,
 				)
-				delete(d.properties, pid)
+				h.metric.Delete(prometheus.Labels{
+					"device":      d.name,
+					"path":        d.path,
+					"property":    prop.name,
+					"unit":        prop.unit,
+					"source_type": "ha",
+				})
 			}
 		}
 	}
@@ -159,13 +167,13 @@ func (h *HAListener) onHaConfMsg(topic string, payload []byte) {
 	propUpdated := false
 	// Create prop node if it doesn't exist yet
 	if !propExists {
-		prop = Property{ignored: false, statusTopic: conf.StatusTopic, lastSeen: time.Now()}
+		prop = Property{ignored: false, statusTopic: conf.StatusTopic}
 		// Subscribe to the prop state topic
 		token := h.client.Subscribe(
 			conf.StatusTopic,
 			0,
 			func(c mqtt.Client, m mqtt.Message) {
-				h.onHaDataMsg(&dev, &prop, m.Payload())
+				h.onHaDataMsg(&dev, conf.UniqueId, m.Payload())
 			},
 		)
 
@@ -215,7 +223,18 @@ func (h *HAListener) onHaConfMsg(topic string, payload []byte) {
 
 }
 
-func (h *HAListener) onHaDataMsg(dev *Device, prop *Property, payload []byte) {
+func (h *HAListener) onHaDataMsg(dev *Device, propId string, payload []byte) {
+	h.devMutex.Lock()
+	defer h.devMutex.Unlock()
+	prop, exists := dev.properties[propId]
+	if !exists {
+		h.logger.Warn("mqtt data callback for nonexisting property",
+			"device", dev.name,
+			"property", propId,
+		)
+		return
+	}
+
 	h.logger.Debug("New mqtt message")
 	if prop.ignored {
 		return
@@ -224,8 +243,10 @@ func (h *HAListener) onHaDataMsg(dev *Device, prop *Property, payload []byte) {
 	if err != nil {
 		h.logger.Warn("Couldn't convert payload to float, set property to ignore", "device", dev.name, "property", prop.name, "payload", payload, "error", err)
 		prop.ignored = true
+		dev.properties[propId] = prop
 	} else {
 		prop.lastSeen = time.Now()
+		dev.properties[propId] = prop
 		// Update metric
 		h.metric.With(prometheus.Labels{
 			"device":      dev.name,
