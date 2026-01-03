@@ -87,7 +87,6 @@ func (h *HAListener) propGC() {
 	for did, d := range h.devices {
 		for pid, prop := range d.properties {
 			if !prop.lastSeen.Equal(zero) && now.Sub(prop.lastSeen).Minutes() > 10 {
-				prop.lastSeen = zero
 				h.logger.Info("GC removing property",
 					"device", did,
 					"device name", d.name,
@@ -95,6 +94,7 @@ func (h *HAListener) propGC() {
 					"property name", prop.name,
 					"last seen", prop.lastSeen,
 				)
+				prop.lastSeen = zero
 				h.metric.Delete(prometheus.Labels{
 					"device":      d.name,
 					"path":        d.path,

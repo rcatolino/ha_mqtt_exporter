@@ -30,7 +30,14 @@ func (d *Device) parseHomieProp(
 	if len(parts) == 0 {
 		value, err := strconv.ParseFloat(payload, 64)
 		if err != nil {
-			logger.Warn("Couldn't convert payload to float", "payload", payload, "error", err)
+			switch payload {
+			case "false":
+				value = 0
+			case "true":
+				value = 1
+			default:
+				logger.Warn("Couldn't convert payload to float", "payload", payload, "error", err)
+			}
 		} else if !prop.ignored {
 			metric.With(prometheus.Labels{
 				"device":      d.name,
