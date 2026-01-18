@@ -231,6 +231,13 @@ func (h *HAListener) onHaConfMsg(topic string, payload []byte) {
 	}
 
 	if devUpdated {
+		h.metric.Delete(prometheus.Labels{
+			"device":      h.devices[conf.Device.ID].name,
+			"path":        h.devices[conf.Device.ID].path,
+			"property":    h.devices[conf.Device.ID].properties[conf.UniqueId].name,
+			"unit":        h.devices[conf.Device.ID].properties[conf.UniqueId].unit,
+			"source_type": "ha",
+		})
 		h.devices[conf.Device.ID] = dev
 	}
 
